@@ -3,4 +3,4 @@ project(Project2 C)
 
 set(CMAKE_C_STANDARD 99)
 
-add_executable(Project2 main.c)
+add_executable(Project2 main.c parsed_command.c parsed_command.h)
