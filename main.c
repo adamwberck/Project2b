@@ -22,24 +22,46 @@ void execute(char **args);
 
 void my_error();
 
+int built_in(char *string,char* path);
+
 int main() {
-    char *input;
-    get_input("myshell>",&input);
-    int count = get_count(input);
-    char **toks = parse_input(input,count);
-    execute(toks);
-    free(toks);
+    int i=0;
+    while(i<50) {
+        i++;
+        char *input;
+        get_input("myshell>", &input);
+        int count = get_count(input);
+        char **toks = parse_input(input, count);
+        execute(toks);
+        free(toks);
+    }
     //output
     return(0);
 }
 
 void execute(char **args) {
+    char* path = "/bin/";
+    int builtin = built_in(args[0],path);//checks if built in cmd
+    if(builtin==0){//exit
+        exit(0);
+    } else if(builtin==1){//cd
+        char* new_dir =  args[1];
+        //printf("\n%s\n",new_dir);
+        chdir(new_dir);
+        return;
+    } else if(builtin==2){//path
+        return;
+    }
     pid_t pid = fork();
+    char *temp  = *args;
+    for(int i=0;i<10;i++){
+        printf("%c",temp[i]);
+    }
     if(pid == 0){
         //this is child
         //execv(args[0],args);
-        char *const arg[]={};
-        execv("./ls",NULL);
+        //char *const arg[]={"/bin/ls",0};
+        execv(args[0],args);
         my_error();//only runs if execv fails
     }else if(pid<0){
         printf("fork failed");
@@ -47,6 +69,18 @@ void execute(char **args) {
         //this is the parent
         wait(NULL);//wait until child is done
     }
+}
+
+int built_in(char *string,char *path) {
+    char *cmd = (string+strlen(path));
+    if(strcmp(cmd,"exit")==0){
+        return 0;
+    }else if(strcmp(cmd,"cd")==0){
+        return 1;
+    }else if(strcmp(cmd,"path")==0){
+        return 2;
+    }
+    return -1;
 }
 
 void my_error() {
@@ -92,12 +126,19 @@ char** parse_input(char* input,int count){
 
 //gets input from user
 void get_input(char* prompt,char **buffer){
-    size_t buffsize = 32;//aprox size of a command; can be changed by getline if not large enough
+    char* path = "/bin/";
+    size_t buffsize = 32+strlen(path);//aprox size of a command; can be changed by getline if not large enough
     *buffer = (char *) malloc(buffsize * sizeof(char)); //allocate space for buffer
     malloc_check(*buffer);//check to ensure space was allocated
     printf("%s",prompt);
     getline(buffer, &buffsize, stdin);//getline
     remove_newline_char(buffer);
+
+    //put path on the begging of buffer
+    char *tmp =  strdup(*buffer);
+    strcpy(*buffer,path);
+    strcat(*buffer,tmp);
+    free(tmp);
     //trim(buffer);
 }
 
@@ -134,8 +175,7 @@ void remove_newline_char(char **str){
 }
 
 void malloc_check(const char* buffer){
-    if( buffer == NULL)
-    {
+    if( buffer == NULL) {
         my_error();//malloc error
     }
 }
