@@ -20,7 +20,7 @@ void execute(char **args,int count);
 
 void my_error();
 
-int my_built_in(char *cmd);
+bool my_built_in(int count, char** args);
 
 
 char** paths;
@@ -42,71 +42,75 @@ int main() {
 }
 
 void execute(char **args,int count) {
-    int builtin = my_built_in(args[0]);//checks if built in cmd
-    if(builtin==0){
-        exit(0);
-    } else if(builtin==1){//cd
-        char* new_dir =  args[1];
-        if(chdir(new_dir)==-1){
-            //cd fails
-            my_error();
-        };
-    } else if(builtin==2){//path
-        //handle memory allocation for paths
-        free(paths);
-        paths = malloc((size_t) (count)*sizeof(char));
-        for(int i=1;i<count;i++){
-            paths[i-1]=malloc(strlen(args[i])* sizeof(char));
-            paths[i-1]=args[i];//set paths
-        }
-        number_of_paths=count-1;
+    //checks if built in command
+    if(my_built_in(count,args)){
+        return;
     }
-    //not built in command run exe
-    else {
-        char *tmp =  strdup(args[0]);
-        bool working_path = false;
-        int i=0;
-        while(!working_path && i<number_of_paths){
-            char *p = strdup(paths[i++]);
-            strcat(p,tmp);
-            //test if it exists and i have execute permission.
-            if(access(p,X_OK)==0){
-                working_path=true;
-            }
+    char *tmp =  strdup(args[0]);
+    bool working_path = false;
+    int i=0;
+    while(!working_path && i<number_of_paths){
+        char *p = strdup(paths[i++]);
+        strcat(p,tmp);
+        //test if it exists and i have execute permission.
+        if(access(p,X_OK)==0){
+            working_path=true;
         }
-        if(!working_path) {
-            printf("Command %s not found.\n",args[0]);
-        } else{
-            char *path = paths[i - 1];
-            //put path on the begging of buffer
-            strcpy(args[0], path);
-            strcat(args[0], tmp);
-            free(tmp);
-            pid_t pid = fork();
-            if (pid == 0) {
-                //this is child
-                execv(args[0], args);
-                my_error();//only runs if execv fails
+    }
+    if(!working_path) {
+        printf("Command %s not found.\n",args[0]);
+    } else{
+        char *path = paths[i - 1];
+        //put path on the begging of buffer
+        strcpy(args[0], path);
+        strcat(args[0], tmp);
+        free(tmp);
+        pid_t pid = fork();
+        if (pid == 0) {
+            //this is child
+            execv(args[0], args);
+            my_error();//only runs if execv fails
 
-            } else if (pid < 0) {
-                printf("fork failed");
-            } else {
-                //this is the parent
-                wait(NULL);//wait until child is done
-            }
+        } else if (pid < 0) {
+            printf("fork failed");
+        } else {
+            //this is the parent
+            wait(NULL);//wait until child is done
         }
     }
 }
 
-int my_built_in(char *cmd) {
-    if(strcmp(cmd,"exit")==0){
-        return 0;
+bool my_built_in(int count,char** args) {
+    char *cmd = args[0];
+    //exit or quit
+    if(strcmp(cmd,"exit")==0 || strcmp(cmd,"quit")==0){
+        exit(0);
+    //cd
     }else if(strcmp(cmd,"cd")==0){
-        return 1;
-    }else if(strcmp(cmd,"path")==0){
-        return 2;
+        char* new_dir =  args[1];
+        if(chdir(new_dir)==-1) {
+            //cd fails
+            my_error();
+        }
+    //path
+    }else if(strcmp(cmd,"path")==0) {
+        //handle memory allocation for paths
+        free(paths);
+        paths = malloc((size_t) (count) * sizeof(char));
+        for (int i = 1; i < count; i++) {
+            paths[i - 1] = malloc(strlen(args[i]) * sizeof(char));
+            paths[i - 1] = args[i];//set paths
+            number_of_paths = count - 1;
+        }
+    } else if(strcmp(cmd,"clr")==0){
+        //system("@cls||clear");
+        printf("\e[1;1H\e[2J");
+    }else{
+        //not built in
+        return false;
     }
-    return -1;
+    //was built in don't execute
+    return true;
 }
 
 void my_error() {
