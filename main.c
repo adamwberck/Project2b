@@ -14,24 +14,22 @@ void get_input(char* prompt,char **buffer);
 
 char** parse_input(char* input,int count);
 
-void trim(char **str);
-
 int get_count(char *input);
 
 void execute(char **args,int count);
 
 void my_error();
 
-int built_in(char *string,char* path);
+int my_built_in(char *cmd);
 
 
 char** paths;
-int nubmer_of_paths = 0;
+int number_of_paths = 0;
 
 int main() {
-    int i=0;
-    while(i<50) {
-        i++;
+    int j=0;
+    while(j<50) {
+        j++;
         char *input;
         get_input("myshell> ", &input);
         int count = get_count(input);
@@ -44,13 +42,15 @@ int main() {
 }
 
 void execute(char **args,int count) {
-    char* path = "/bin/";
-    int builtin = built_in(args[0],path);//checks if built in cmd
+    int builtin = my_built_in(args[0]);//checks if built in cmd
     if(builtin==0){
         exit(0);
     } else if(builtin==1){//cd
         char* new_dir =  args[1];
-        chdir(new_dir);
+        if(chdir(new_dir)==-1){
+            //cd fails
+            my_error();
+        };
     } else if(builtin==2){//path
         //handle memory allocation for paths
         free(paths);
@@ -59,36 +59,46 @@ void execute(char **args,int count) {
             paths[i-1]=malloc(strlen(args[i])* sizeof(char));
             paths[i-1]=args[i];//set paths
         }
-        nubmer_of_paths=count-1;
+        number_of_paths=count-1;
     }
     //not built in command run exe
     else {
-        pid_t pid = fork();
-        char *temp = *args;
-        /*
-        for(int i=0;i<10;i++){
-            printf("%c",temp[i]);
-        }*/
-        if (pid == 0) {
-            //this is child
+        char *tmp =  strdup(args[0]);
+        bool working_path = false;
+        int i=0;
+        while(!working_path && i<number_of_paths){
+            char *p = strdup(paths[i++]);
+            strcat(p,tmp);
+            //test if it exists and i have execute permission.
+            if(access(p,X_OK)==0){
+                working_path=true;
+            }
+        }
+        if(!working_path) {
+            printf("Command %s not found.\n",args[0]);
+        } else{
+            char *path = paths[i - 1];
             //put path on the begging of buffer
-            char *tmp =  strdup(args[0]);
-            strcpy(args[0],path);
-            strcat(args[0],tmp);
+            strcpy(args[0], path);
+            strcat(args[0], tmp);
             free(tmp);
-            execv(args[0], args);
-            my_error();//only runs if execv fails
-        } else if (pid < 0) {
-            printf("fork failed");
-        } else {
-            //this is the parent
-            wait(NULL);//wait until child is done
+            pid_t pid = fork();
+            if (pid == 0) {
+                //this is child
+                execv(args[0], args);
+                my_error();//only runs if execv fails
+
+            } else if (pid < 0) {
+                printf("fork failed");
+            } else {
+                //this is the parent
+                wait(NULL);//wait until child is done
+            }
         }
     }
 }
 
-int built_in(char *string,char *path) {
-    char *cmd = (string+strlen(path));
+int my_built_in(char *cmd) {
     if(strcmp(cmd,"exit")==0){
         return 0;
     }else if(strcmp(cmd,"cd")==0){
@@ -102,7 +112,6 @@ int built_in(char *string,char *path) {
 void my_error() {
     char error_message[30] = "An error has occurred\n";
     write(STDERR_FILENO,error_message,strlen(error_message));
-    exit(1);
 }
 
 //counts the different arguments in input including command
@@ -152,24 +161,6 @@ void get_input(char* prompt,char **buffer){
     //trim(buffer);
 }
 
-void trim(char **str){
-    char *s = *str;
-    int i=0;
-    while(isspace(s[i])){
-        i++;
-    }
-    for(int j=i;j<strlen(s);j++){
-        s[j]=s[j+1];
-    }
-    i=0;
-    while(!isspace(s[i])){
-        i++;
-    }
-    int j = i;
-    while(s[j]!='\0'){
-        j;
-    }
-}
 
 void remove_newline_char(char **str){
     char *s = *str;//get pointer to char
@@ -187,5 +178,6 @@ void remove_newline_char(char **str){
 void malloc_check(const char* buffer){
     if( buffer == NULL) {
         my_error();//malloc error
+        exit(1);
     }
 }
