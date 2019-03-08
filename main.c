@@ -26,6 +26,7 @@ int built_in(char *string,char* path);
 
 
 char** paths;
+int nubmer_of_paths = 0;
 
 int main() {
     int i=0;
@@ -58,7 +59,7 @@ void execute(char **args,int count) {
             paths[i-1]=malloc(strlen(args[i])* sizeof(char));
             paths[i-1]=args[i];//set paths
         }
-
+        nubmer_of_paths=count-1;
     }
     //not built in command run exe
     else {
@@ -70,6 +71,11 @@ void execute(char **args,int count) {
         }*/
         if (pid == 0) {
             //this is child
+            //put path on the begging of buffer
+            char *tmp =  strdup(args[0]);
+            strcpy(args[0],path);
+            strcat(args[0],tmp);
+            free(tmp);
             execv(args[0], args);
             my_error();//only runs if execv fails
         } else if (pid < 0) {
@@ -143,11 +149,6 @@ void get_input(char* prompt,char **buffer){
     getline(buffer, &buffsize, stdin);//getline
     remove_newline_char(buffer);
 
-    //put path on the begging of buffer
-    char *tmp =  strdup(*buffer);
-    strcpy(*buffer,path);
-    strcat(*buffer,tmp);
-    free(tmp);
     //trim(buffer);
 }
 
