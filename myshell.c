@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <wait.h>
+#include <dirent.h>
 
 void malloc_check(const char* buffer);
 
@@ -22,13 +23,19 @@ void my_error();
 
 bool my_built_in(int count, char** args);
 
+void put_shell_into_env();
+
+int remove_exe_name(char **str);
+
+//
+extern char** environ;
 
 char** paths;
 int number_of_paths = 0;
 
 int main() {
+    put_shell_into_env();
     int j=0;
-
     while(j<50) {
         j++;
         char *input;
@@ -40,6 +47,39 @@ int main() {
     }
     //output
     return(0);
+}
+
+void put_shell_into_env() {
+    //allocate space to hold shell environment
+    size_t buffer_size=PATH_MAX;
+    char* temp = malloc(buffer_size* sizeof(char));
+    readlink("/proc/self/exe",temp,buffer_size);
+    //remove exe name
+    remove_exe_name(&temp);
+    //add '/myshell' to the end of name
+    strcat(temp,"/myshell");
+    //allocate space for shell
+    char* shell=malloc((strlen(temp)+7)* sizeof(char));
+    //prefix concat 'shell=' to environment
+    strcpy(shell,"shell=");
+    strcat(shell,temp);
+    //put shell into environment
+    if(putenv(shell)!=0){
+        printf("putenv failed");
+    }
+    free(temp);//free temp memory;
+}
+
+int remove_exe_name(char **str) {
+    char* s = *str;
+    size_t len =  strlen(s);
+    for(size_t i=len-1;i>=0;i--) {
+        if(s[i] == '/'){
+            s[i]='\0';
+            return 0;
+        }
+    }
+    return -1;
 }
 
 void execute(char **args,int count) {
@@ -92,6 +132,19 @@ bool my_built_in(int count,char** args) {
         if(chdir(new_dir)==-1) {
             //cd fails
             my_error();
+        }else{
+            char cwd[PATH_MAX];
+            if (getcwd(cwd, sizeof(cwd)) != NULL) {
+                printf("Current working dir: %s\n", cwd);
+                char* PWD = malloc((strlen(cwd)+7)* sizeof(char));
+                //prefix concat 'shell=' to environment
+                strcpy(PWD,"PWD=");
+                strcat(PWD,cwd);
+                putenv(PWD);
+            } else {
+                perror("getcwd() error");
+                return 1;
+            }
         }
     //path
     }else if(strcmp(cmd,"path")==0) {
@@ -105,14 +158,41 @@ bool my_built_in(int count,char** args) {
         }
     //clears screen
     } else if(strcmp(cmd,"clr")==0){
+        //goto position(1,1) then clear the screen
         printf("\e[1;1H\e[2J");
+    //list contents of directory
+    } else if(strcmp(cmd,"dir")==0){
+        if(count==2) {
+            DIR *d;
+            struct dirent *dir;
+            d = opendir(args[1]);
+            if (d) {
+                while ((dir = readdir(d)) != NULL) {
+                    //printf("%s\n", dir->d_name);
+                }
+                closedir(d);
+            }
+        }else{
+            printf("Correct usage: dir <directory>");
+        }
     //environ
     } else if(strcmp(cmd,"environ")==0){
         int i=0;
         while(environ[i]){
             printf("%s\n", environ[i++]);
         }
-    }else{
+    //echo
+    } else if(strcmp(cmd,"echo")==0){
+        for(int i=1;i<count;i++) {
+            printf("%s ",args[i]);
+        }
+        printf("\n");
+    } else if(strcmp(cmd,"help")==0) {
+        //TODO manual
+    } else if(strcmp(cmd,"pause")==0) {
+        printf("Paused. Press Enter to Continue.");
+        while (getchar() != '\n'&& getchar() != '\r');
+    } else{
         //not built in
         return false;
     }
@@ -161,12 +241,11 @@ char** parse_input(char* input,int count){
 
 //gets input from user
 void get_input(char* prompt,char **buffer){
-    char* path = "/bin/";
-    size_t buffsize = 32+strlen(path);//aprox size of a command; can be changed by getline if not large enough
-    *buffer = (char *) malloc(buffsize * sizeof(char)); //allocate space for buffer
+    size_t buffer_size = 32;//aprox size of a command; can be changed by getline if not large enough
+    *buffer = (char *) malloc(buffer_size * sizeof(char)); //allocate space for buffer
     malloc_check(*buffer);//check to ensure space was allocated
     printf("%s",prompt);
-    getline(buffer, &buffsize, stdin);//getline
+    getline(buffer, &buffer_size, stdin);//getline
     remove_newline_char(buffer);
 
     //trim(buffer);
