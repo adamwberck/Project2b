@@ -18,56 +18,66 @@ void trim(char **str);
 
 int get_count(char *input);
 
-void execute(char **args);
+void execute(char **args,int count);
 
 void my_error();
 
 int built_in(char *string,char* path);
+
+
+char** paths;
 
 int main() {
     int i=0;
     while(i<50) {
         i++;
         char *input;
-        get_input("myshell>", &input);
+        get_input("myshell> ", &input);
         int count = get_count(input);
         char **toks = parse_input(input, count);
-        execute(toks);
+        execute(toks,count);
         free(toks);
     }
     //output
     return(0);
 }
 
-void execute(char **args) {
+void execute(char **args,int count) {
     char* path = "/bin/";
     int builtin = built_in(args[0],path);//checks if built in cmd
-    if(builtin==0){//exit
+    if(builtin==0){
         exit(0);
     } else if(builtin==1){//cd
         char* new_dir =  args[1];
-        //printf("\n%s\n",new_dir);
         chdir(new_dir);
-        return;
     } else if(builtin==2){//path
-        return;
+        //handle memory allocation for paths
+        free(paths);
+        paths = malloc((size_t) (count)*sizeof(char));
+        for(int i=1;i<count;i++){
+            paths[i-1]=malloc(strlen(args[i])* sizeof(char));
+            paths[i-1]=args[i];//set paths
+        }
+
     }
-    pid_t pid = fork();
-    char *temp  = *args;
-    for(int i=0;i<10;i++){
-        printf("%c",temp[i]);
-    }
-    if(pid == 0){
-        //this is child
-        //execv(args[0],args);
-        //char *const arg[]={"/bin/ls",0};
-        execv(args[0],args);
-        my_error();//only runs if execv fails
-    }else if(pid<0){
-        printf("fork failed");
-    } else{
-        //this is the parent
-        wait(NULL);//wait until child is done
+    //not built in command run exe
+    else {
+        pid_t pid = fork();
+        char *temp = *args;
+        /*
+        for(int i=0;i<10;i++){
+            printf("%c",temp[i]);
+        }*/
+        if (pid == 0) {
+            //this is child
+            execv(args[0], args);
+            my_error();//only runs if execv fails
+        } else if (pid < 0) {
+            printf("fork failed");
+        } else {
+            //this is the parent
+            wait(NULL);//wait until child is done
+        }
     }
 }
 
@@ -89,7 +99,7 @@ void my_error() {
     exit(1);
 }
 
-//counts the different words in input
+//counts the different arguments in input including command
 int get_count(char *input) {
     bool part_of_word = false;
     int count=0;
@@ -98,7 +108,7 @@ int get_count(char *input) {
             part_of_word=true;
             count++;
         }
-        else{
+        else if(isspace(input[i])){
             part_of_word=false;
         }
     }
@@ -109,8 +119,7 @@ char** parse_input(char* input,int count){
     char** output    = 0;
     char del[2]=" ";
 
-    output = malloc(sizeof(char*) * count);
-    //malloc_check(output);
+    output = malloc(sizeof(char*) * (count+2));
     int j  = 0;
     char* token = strtok(input, del);
     while (token)
