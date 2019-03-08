@@ -28,6 +28,7 @@ int number_of_paths = 0;
 
 int main() {
     int j=0;
+
     while(j<50) {
         j++;
         char *input;
@@ -102,9 +103,15 @@ bool my_built_in(int count,char** args) {
             paths[i - 1] = args[i];//set paths
             number_of_paths = count - 1;
         }
+    //clears screen
     } else if(strcmp(cmd,"clr")==0){
-        //system("@cls||clear");
         printf("\e[1;1H\e[2J");
+    //environ
+    } else if(strcmp(cmd,"environ")==0){
+        int i=0;
+        while(environ[i]){
+            printf("%s\n", environ[i++]);
+        }
     }else{
         //not built in
         return false;
