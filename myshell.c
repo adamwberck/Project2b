@@ -9,8 +9,10 @@
 #include <sys/fcntl.h>
 #include <errno.h>
 
+#define FD_READ_END 0
+#define FD_WRITE_END 1
 
-void my_cd(int count,char** args);
+void my_cd(int count, char** args);
 
 void malloc_check(const char* buffer);
 
@@ -22,7 +24,7 @@ char** parse_input(char* input,int count);
 
 int get_count(char *input);
 
-void execute(char **args,int count,char extra);
+void execute(char **args,int count,char extra,bool piping_in);
 
 void my_error();
 
@@ -50,7 +52,7 @@ extern char** environ;
 
 char** paths;
 int number_of_paths = 0;
-bool is_parallel=false;
+int fd[2];
 
 int main() {
     put_shell_into_env();
@@ -76,38 +78,42 @@ void process_input(int count, char *const *parsed_input) {
     char **single_command = malloc(sizeof(char*)*(count+2));//one command that can be part of execv
     int cmd_cnt = 0;//number of separate commands
     int args_cnt=0;//command count keeps track of arguments in one single command
+    bool piping_in = false;//keeps track of piping in read redirect;
     for(int i=0;i<count;i++){
-            //make wrd set to first word of input
-            char *wrd = parsed_input[i];
-            if(strcmp(wrd,"&")==0){
-                extra = '&';
-            }else if(strcmp(wrd,"|")==0){
-                extra = '|';
-            }
-            if (extra=='\0'){
-                //add word to command
-                *(single_command + args_cnt++) = strdup(wrd);
-            }
-            //checks if &/| separator or end of arguments
-            if(extra != '\0' || ((i+1) >= count)){
-                //execute the single command
-                execute(single_command,args_cnt,extra);
-                cmd_cnt++;
-                //zero out single command; not doing this cause issues when performing second execv;
-                for(int m=0;m<args_cnt;m++){
-                    single_command[m]=NULL;
-                }
-                if((i+1) >= count &&  extra!='&'){// if end of the line and not background exe
-                    cmd_cnt--;//last command already waited in execute;
-                    while(cmd_cnt>0) {
-                        wait(NULL);//wait until exe f
-                        cmd_cnt--;
-                    }
-                }
-                extra='\0';//reset extra
-                args_cnt=0;//set command count to 0;
-            }
+        //make wrd set to first word of input
+        char *wrd = parsed_input[i];
+        if(strcmp(wrd,"&")==0){
+            extra = '&';
+        }else if(strcmp(wrd,"|")==0){
+            extra = '|';
         }
+        if (extra=='\0'){
+            //add word to command
+            *(single_command + args_cnt++) = strdup(wrd);
+        }
+        //checks if &/| separator or end of arguments
+        if(extra != '\0' || ((i+1) >= count)){
+            //execute the single command
+            execute(single_command,args_cnt,extra,piping_in);
+            piping_in = extra=='|';//if piping out then next time its piping in.
+            cmd_cnt++;
+            //zero out single command; not doing this cause issues when performing second execv;
+            for(int m=0;m<args_cnt;m++){
+                single_command[m]=NULL;
+            }
+            if((i+1) >= count &&  extra!='&'){// if end of the line and not background exe
+                cmd_cnt--;//last command already waited in execute;
+                while(cmd_cnt>0) {
+                    wait(NULL);//wait until exe f
+                    cmd_cnt--;
+                }
+            }
+            extra='\0';//reset extra
+            args_cnt=0;//set command count to 0;
+        }
+    }
+    //close(fd[FD_READ_END]);
+    //close(fd[FD_WRITE_END]);
     free(single_command);
 }
 
@@ -122,9 +128,12 @@ char *get_prompt() {
     while(dir[i]!='/'&&i>=0){
         i--;
     }
-    char * end_prompt = " ~:myshell> ";
     char *prompt = malloc(PATH_MAX* sizeof(char));
-    strcpy(prompt,dir+i);
+    strcpy(prompt,"\n");
+    char *mid_prompt = malloc(strlen(dir)* sizeof(char));
+    strcpy(mid_prompt,dir+i);
+    char * end_prompt = " ~:myshell> ";
+    strcat(prompt,mid_prompt);
     strcat(prompt,end_prompt);
     return prompt;
 }
@@ -163,7 +172,7 @@ int remove_exe_name(char **str) {
 }
 
 //args is arguments, count is number of arguments and extra is if to pipe or to run in parallel
-void execute(char **args,int count,char extra) {
+void execute(char **args,int count,char extra,bool piping_in) {
     //checks if built in command
     if(my_built_in(count,args)){
         return;
@@ -182,31 +191,45 @@ void execute(char **args,int count,char extra) {
     }
     if(!working_path) {
         printf("Command %s not found.\n",args[0]);
-    } else{
-        char *path = paths[i-1];
+    } else {
+        char *path = paths[i - 1];
         //put path on the begging of buffer
         strcpy(args[0], path);
         strcat(args[0], tmp);
         free(tmp);//free tmp
         //check if has a write redirect
         int write_redirect = has_write_redirect(args, count);
-        if(write_redirect==-1){
+        if (write_redirect == -1) {
             printf("Error: malformed write_redirect\n");
             return;
         }
         //check if has a read redirect
-        int read_redirect = has_read_redirect(args,count);
+        int read_redirect = has_read_redirect(args, count);
         //put in null terminator
-        args[count]=NULL;
+        args[count] = NULL;
+
+        if (extra == '|') {
+            pipe(fd);
+        }
         pid_t pid = fork();
         if (pid == 0) {
             //this is child
+            if(extra == '|'){//pipe out
+                dup2(fd[FD_WRITE_END],STDOUT_FILENO);
+                close(fd[FD_READ_END]);
+                close(fd[FD_WRITE_END]);
+            }
             if (write_redirect>=1){
                 perform_write_redirect(args, count, write_redirect);
                 //remove write redirect from arguments
                 args[count-1] = 0;
                 args[count-2] = 0;
                 count-=2;
+            }
+            if(piping_in){
+                dup2(fd[FD_READ_END],STDIN_FILENO);
+                close(fd[FD_READ_END]);
+                close(fd[FD_WRITE_END]);
             }
             if (read_redirect==1){
                 //read only open of input file
@@ -225,7 +248,11 @@ void execute(char **args,int count,char extra) {
             printf("fork failed");
         } else {
             //this is the parent
-            if(extra!='&') {//don't wait if parallel
+            if(extra!='&' && extra!='|') {//don't wait if piping or parallel
+                if(piping_in){
+                    close(fd[FD_WRITE_END]);
+                    close(fd[FD_READ_END]);
+                }
                 wait(NULL);//wait until child is done
             }
         }
