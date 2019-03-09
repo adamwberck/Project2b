@@ -15,7 +15,7 @@ void malloc_check(const char* buffer);
 
 void remove_newline_char(char **str);
 
-void get_input(char* prompt,char **buffer);
+void get_input(char* prompt,char **input);
 
 char** parse_input(char* input,int count);
 
@@ -36,6 +36,8 @@ char *get_prompt() ;
 void my_dir(int count, char *const *args);
 
 int has_redirect(char **args,int count);
+
+void replace_other_whitespace(char **str);
 
 //
 extern char** environ;
@@ -325,14 +327,27 @@ char** parse_input(char* input,int count){
 
 
 //gets input from user
-void get_input(char* prompt,char **buffer){
+void get_input(char* prompt,char **input){
     size_t buffer_size = 32;//aprox size of a command; can be changed by getline if not large enough
-    *buffer = (char *) malloc(buffer_size * sizeof(char)); //allocate space for buffer
-    malloc_check(*buffer);//check to ensure space was allocated
+    *input = (char *) malloc(buffer_size * sizeof(char)); //allocate space for input
+    malloc_check(*input);//check to ensure space was allocated
     printf("%s",prompt);
-    getline(buffer, &buffer_size, stdin);//getline
-    remove_newline_char(buffer);
+    getline(input, &buffer_size, stdin);//getline
+    remove_newline_char(input);
+    replace_other_whitespace(input);
+}
 
+void replace_other_whitespace(char **str) {
+    char *s = *str;//get pointer to char
+    int i=0;
+    //loop through string
+    while(s[i]!='\0'){//stop looping when you get to null terminator
+        //replace h-tab v-tab and form feed with space
+        if(s[i]=='\t'||s[i]=='\v'||s[i]=='\f'){
+            s[i]=' ';
+        }
+        i++;
+    }
 }
 
 
@@ -341,8 +356,8 @@ void remove_newline_char(char **str){
     int i=0;
     //loop through string
     while(s[i]!='\0'){//stop looping when you get to null terminator
-        //replace new line with null terminator
-        if(s[i]=='\n'){
+        //replace newline with null terminator
+        if(s[i]=='\n'||s[i]=='\r'){
             s[i]='\0';
         }
         i++;
