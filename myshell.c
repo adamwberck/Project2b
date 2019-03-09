@@ -35,28 +35,34 @@ char *get_prompt() ;
 
 void my_dir(int count, char *const *args);
 
-int has_redirect(char **args,int count);
+int has_write_redirect(char **args, int count);
 
 void replace_other_whitespace(char **str);
+
+int has_read_redirect(char **args, int count);
+
+void perform_write_redirect(char *const *args, int count, int write_redirect);
 
 //
 extern char** environ;
 
 char** paths;
 int number_of_paths = 0;
+bool is_parallel=false;
 
 int main() {
     put_shell_into_env();
     int j=0;
     while(j<50) {
         j++;
-        char *input;
         char *prompt = get_prompt();
+        char *input;
         get_input(prompt, &input);
         int count = get_count(input);
-        char **toks = parse_input(input, count);
-        execute(toks,count);
-        free(toks);
+        char **parsedInput = parse_input(input, count);
+        execute(parsedInput,count);
+
+        free(parsedInput);
     }
     //output
     return(0);
@@ -137,44 +143,93 @@ void execute(char **args,int count) {
         strcpy(args[0], path);
         strcat(args[0], tmp);
         free(tmp);
-        int redirect = has_redirect(args,count);
-        if(redirect==-1){
-            printf("Error: malformed redirect\n");
+        int write_redirect = has_write_redirect(args, count);
+        if(write_redirect==-1){
+            printf("Error: malformed write_redirect\n");
             return;
         }
+        int read_redirect = has_read_redirect(args,count);
         pid_t pid = fork();
         if (pid == 0) {
             //this is child
-            if (redirect==1){
-                //read write and create mode, and read write permissions;
-                int f = open(args[count-1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-                dup2(f,1);//stdout goto file;
-                dup2(f,2);//std error goto
+            if (write_redirect>=1){
+                perform_write_redirect(args, count, write_redirect);
+                //remove write redirect from arguments
+                args[count-1] = 0;
+                args[count-2] = 0;
+                count-=2;
+            }
+            if (read_redirect==1){
+                //read only open of input file
+                int f = open(args[count - 1], O_RDONLY);
+                dup2(f,STDIN_FILENO);//stdout goto file;
                 close(f);
-                //remove redirect from arguments
+                //remove read redirect from arguments
                 args[count-1] = 0;
                 args[count-2] = 0;
             }
+            //run code
             execv(args[0], args);
             my_error();//only runs if execv fails; never should run
         } else if (pid < 0) {
             printf("fork failed");
         } else {
             //this is the parent
-            wait(NULL);//wait until child is done
+            if(!is_parallel) {
+                wait(NULL);//wait until child is done
+            }
         }
     }
 }
 
-//returns 1 if redirect, 0 if not, and -1 if error;
-int has_redirect(char **args,int count) {
+void perform_write_redirect(char *const *args, int count, int write_redirect) {
+    int f=0;
+    //truncate
+    if(write_redirect==1) {
+        f = open(args[count - 1], O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+    //append
+    }else{
+        f = open(args[count - 1], O_RDWR | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
+    }
+    dup2(f,STDOUT_FILENO);//stdout goto file;
+    dup2(f,STDERR_FILENO);//std error goto
+    close(f);
+}
+
+int has_read_redirect(char **args, int count) {
+    //check if has write redirect to change argument check
+    if(has_write_redirect(args,count)>=1){
+        count-=2;
+    }
     int is_redirect=0;
     for(int i=0;i<count;i++){
         char *temp = args[i];
-        if(temp[0]=='>'&&strlen(temp)==1){
+        if(temp[0]=='<'&&strlen(temp)==1){
             //checks if redirect is malformed
             if(is_redirect == 0 && count-2==i) {
                 is_redirect = 1;
+            }else{
+                return -1;
+            }
+        }
+    }
+    return is_redirect;
+}
+
+//returns 1 if redirect replace,2 if redirect append 0 if not, and -1 if error;
+int has_write_redirect(char **args, int count) {
+    int is_redirect=0;
+    for(int i=0;i<count;i++){
+        char *temp = args[i];
+        if(temp[0]=='>'&&strlen(temp)<=2){
+            //checks if redirect is malformed
+            if(is_redirect == 0 && count-2==i) {
+                //check if append or replace
+                if(temp[1]=='>' && strlen(temp)==2){
+                    is_redirect = 2;//append
+                }else {
+                    is_redirect = 1;//replace
+                }
             }else{
                 return -1;
             }
