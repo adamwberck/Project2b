@@ -7,6 +7,7 @@
 #include <wait.h>
 #include <dirent.h>
 #include <sys/fcntl.h>
+#include <errno.h>
 
 
 void my_cd(int count,char** args);
@@ -82,7 +83,7 @@ int main() {
                 execute(single_command,cmd_cnt,extra);
                 //zero out single command; not doing this cause issues when performing second execv;
                 for(int m=0;m<cmd_cnt;m++){
-                    single_command[m]=0;
+                    //single_command[m]=NULL;
                 }
                 extra='\0';
                 cmd_cnt=0;
@@ -170,13 +171,17 @@ void execute(char **args,int count,char extra) {
         //put path on the begging of buffer
         strcpy(args[0], path);
         strcat(args[0], tmp);
-        free(tmp);
+        free(tmp);//free tmp
+        //check if has a write redirect
         int write_redirect = has_write_redirect(args, count);
         if(write_redirect==-1){
             printf("Error: malformed write_redirect\n");
             return;
         }
+        //check if has a read redirect
         int read_redirect = has_read_redirect(args,count);
+        //put in null terminator
+        args[count]=0;
         pid_t pid = fork();
         if (pid == 0) {
             //this is child
@@ -198,7 +203,7 @@ void execute(char **args,int count,char extra) {
             }
             //run code
             execv(args[0], args);
-            printf("exe failed\n");
+            printf("exe failed %d \n",errno);
             //my_error();//only runs if execv fails; never should run
         } else if (pid < 0) {
             printf("fork failed");
