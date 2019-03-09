@@ -74,7 +74,8 @@ int main() {
 void process_input(int count, char *const *parsed_input) {
     char extra = '\0';//extra keeps track of special ways of executing commands
     char **single_command = malloc(sizeof(char*)*(count+2));//one command that can be part of execv
-    int cmd_cnt=0;//command count keeps track of arguments in one single command
+    int cmd_cnt = 0;//number of separate commands
+    int args_cnt=0;//command count keeps track of arguments in one single command
     for(int i=0;i<count;i++){
             //make wrd set to first word of input
             char *wrd = parsed_input[i];
@@ -85,21 +86,26 @@ void process_input(int count, char *const *parsed_input) {
             }
             if (extra=='\0'){
                 //add word to command
-                *(single_command + cmd_cnt++) = strdup(wrd);
+                *(single_command + args_cnt++) = strdup(wrd);
             }
             //checks if &/| separator or end of arguments
             if(extra != '\0' || ((i+1) >= count)){
                 //execute the single command
-                execute(single_command,cmd_cnt,extra);
+                execute(single_command,args_cnt,extra);
+                cmd_cnt++;
                 //zero out single command; not doing this cause issues when performing second execv;
-                for(int m=0;m<cmd_cnt;m++){
+                for(int m=0;m<args_cnt;m++){
                     single_command[m]=NULL;
                 }
-                if((i+1) >= count &&  extra!='&'){// if end of the line and not parallel
-                    wait(NULL);//wait until exe f
+                if((i+1) >= count &&  extra!='&'){// if end of the line and not background exe
+                    cmd_cnt--;//last command already waited in execute;
+                    while(cmd_cnt>0) {
+                        wait(NULL);//wait until exe f
+                        cmd_cnt--;
+                    }
                 }
                 extra='\0';//reset extra
-                cmd_cnt=0;//set command count to 0;
+                args_cnt=0;//set command count to 0;
             }
         }
     free(single_command);
