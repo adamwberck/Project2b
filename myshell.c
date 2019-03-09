@@ -272,13 +272,7 @@ void my_cd(int count,char** args){
 }
 
 void my_dir(int count, char ** args) {
-    int write_redirect = has_write_redirect(args,count);
-    if(count == 2 || write_redirect>=1) {
-        int old_out = 0;
-        if(write_redirect>=1){
-            old_out = dup(STDOUT_FILENO);
-            perform_write_redirect(args,count,write_redirect);
-        }
+    if(count == 2) {
         DIR *d;
         struct dirent *dir;
         d = opendir(args[1]);
@@ -288,9 +282,6 @@ void my_dir(int count, char ** args) {
                 write(STDOUT_FILENO,"\n",1);
             }
             closedir(d);
-        }
-        if(write_redirect>=1){
-            dup2(old_out,STDOUT_FILENO);
         }
     }else{
         printf("Correct usage: dir <directory>");
@@ -317,28 +308,45 @@ bool my_built_in(int count, char** args) {
             number_of_paths = count - 1;
         }
     //clears screen
-    } else if(strcmp(cmd,"clr")==0){
+    } else if(strcmp(cmd,"clr")==0) {
         //goto position(1,1) then clear the screen
         printf("\e[1;1H\e[2J");
-    //list contents of directory
-    } else if(strcmp(cmd,"dir")==0){
-        my_dir(count, args);
-    //environ
-    } else if(strcmp(cmd,"environ")==0){
+
+    //possible output redirection
+    }else if(strcmp(cmd,"dir")==0||strcmp(cmd,"environ")==0||(strcmp(cmd,"echo")==0)||strcmp(cmd,"help")==0){
+        int write_redirect = has_write_redirect(args,count);
+        int old_out = 0;
+        if(write_redirect>=1){
+            old_out = dup(STDOUT_FILENO);
+            perform_write_redirect(args,count,write_redirect);
+            count-=2;
+        }
+        //list contents of directory
+        if(strcmp(cmd,"dir")==0){
+            my_dir(count, args);
         //list environment vars
-        int i=0;
-        while(environ[i]){
-            printf("%s\n", environ[i++]);
+        } else if(strcmp(cmd,"environ")==0){
+            int i=0;
+            while(environ[i]){
+                write(STDOUT_FILENO,environ[i],strlen(environ[i]));
+                write(STDOUT_FILENO,"\n",1);
+                i++;
+            }
+        //echo: repeat entered commands
+        } else if(strcmp(cmd,"echo")==0){
+            for(int i=1;i<count;i++) {
+                write(STDOUT_FILENO,args[i],strlen(args[i]));
+                write(STDOUT_FILENO," ",1);
+            }
+            write(STDOUT_FILENO,"\n",1);
+        } else if(strcmp(cmd,"help")==0) {
+            //TODO manual
+            //pause
         }
-    //echo
-    } else if(strcmp(cmd,"echo")==0){
-        for(int i=1;i<count;i++) {
-            printf("%s ",args[i]);
+        //reset STDOUT
+        if(write_redirect>=1){
+            dup2(old_out,STDOUT_FILENO);
         }
-        printf("\n");
-    } else if(strcmp(cmd,"help")==0) {
-        //TODO manual
-    //pause
     } else if(strcmp(cmd,"pause")==0) {
         printf("Paused. Press Enter to Continue.");
         //stays in while until enter
