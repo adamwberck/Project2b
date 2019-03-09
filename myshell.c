@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <wait.h>
 #include <dirent.h>
+#include <sys/fcntl.h>
 
 
 void my_cd(int count,char** args);
@@ -33,6 +34,8 @@ int remove_exe_name(char **str);
 char *get_prompt() ;
 
 void my_dir(int count, char *const *args);
+
+int has_redirect(char **args,int count);
 
 //
 extern char** environ;
@@ -132,12 +135,26 @@ void execute(char **args,int count) {
         strcpy(args[0], path);
         strcat(args[0], tmp);
         free(tmp);
+        int redirect = has_redirect(args,count);
+        if(redirect==-1){
+            printf("Error: malformed redirect\n");
+            return;
+        }
         pid_t pid = fork();
         if (pid == 0) {
             //this is child
+            if (redirect==1){
+                //read write and create mode, and read write permissions;
+                int f = open(args[count-1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+                dup2(f,1);//stdout goto file;
+                dup2(f,2);//std error goto
+                close(f);
+                //remove redirect from arguments
+                args[count-1] = 0;
+                args[count-2] = 0;
+            }
             execv(args[0], args);
-            my_error();//only runs if execv fails
-
+            my_error();//only runs if execv fails; never should run
         } else if (pid < 0) {
             printf("fork failed");
         } else {
@@ -146,6 +163,24 @@ void execute(char **args,int count) {
         }
     }
 }
+
+//returns 1 if redirect, 0 if not, and -1 if error;
+int has_redirect(char **args,int count) {
+    int is_redirect=0;
+    for(int i=0;i<count;i++){
+        char *temp = args[i];
+        if(temp[0]=='>'&&strlen(temp)==1){
+            //checks if redirect is malformed
+            if(is_redirect == 0 && count-2==i) {
+                is_redirect = 1;
+            }else{
+                return -1;
+            }
+        }
+    }
+    return is_redirect;
+}
+
 void my_cd(int count,char** args){
     //if count more than two error
     if (count>2){
@@ -187,9 +222,7 @@ void my_dir(int count, char *const *args) {
         d = opendir(args[1]);
         if (d) {
             while ((dir = readdir(d)) != NULL) {
-                if(dir->d_name[0]!='.' || strlen(dir->d_name)>2) {
-                    printf("%s\n", dir->d_name);
-                }
+                printf("%s\n", dir->d_name);
             }
             closedir(d);
         }
