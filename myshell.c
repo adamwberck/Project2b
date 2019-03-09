@@ -7,6 +7,9 @@
 #include <wait.h>
 #include <dirent.h>
 
+
+void my_cd(int count,char** args);
+
 void malloc_check(const char* buffer);
 
 void remove_newline_char(char **str);
@@ -27,6 +30,10 @@ void put_shell_into_env();
 
 int remove_exe_name(char **str);
 
+char *get_prompt() ;
+
+void my_dir(int count, char *const *args);
+
 //
 extern char** environ;
 
@@ -39,7 +46,8 @@ int main() {
     while(j<50) {
         j++;
         char *input;
-        get_input("myshell> ", &input);
+        char *prompt = get_prompt();
+        get_input(prompt, &input);
         int count = get_count(input);
         char **toks = parse_input(input, count);
         execute(toks,count);
@@ -47,6 +55,24 @@ int main() {
     }
     //output
     return(0);
+}
+
+
+char *get_prompt() {
+    char dir[PATH_MAX];
+    if (getcwd(dir, sizeof(dir)) == NULL) {
+        printf("getcwd failed\n");//never should run
+    }
+    //get position of / to find relative dir.
+    size_t i=strlen(dir)-1;
+    while(dir[i]!='/'&&i>=0){
+        i--;
+    }
+    char * end_prompt = " ~:myshell> ";
+    char *prompt = malloc(PATH_MAX* sizeof(char));
+    strcpy(prompt,dir+i);
+    strcat(prompt,end_prompt);
+    return prompt;
 }
 
 void put_shell_into_env() {
@@ -120,22 +146,28 @@ void execute(char **args,int count) {
         }
     }
 }
-
-bool my_built_in(int count,char** args) {
-    char *cmd = args[0];
-    //exit or quit
-    if(strcmp(cmd,"exit")==0 || strcmp(cmd,"quit")==0){
-        exit(0);
-    //cd
-    }else if(strcmp(cmd,"cd")==0){
-        char* new_dir =  args[1];
+void my_cd(int count,char** args){
+    //if count more than two error
+    if (count>2){
+        printf("cd takes one argument\n");
+    }
+        //other wise run cd
+    else{
+        char *new_dir;
+        //one argument give own directory
+        if(count==1){
+            new_dir=".";
+            //otherwise give first argument
+        }else{
+            new_dir=args[1];
+        }
         if(chdir(new_dir)==-1) {
             //cd fails
             my_error();
         }else{
             char cwd[PATH_MAX];
             if (getcwd(cwd, sizeof(cwd)) != NULL) {
-                printf("Current working dir: %s\n", cwd);
+                printf("Current directory : %s\n", cwd);
                 char* PWD = malloc((strlen(cwd)+7)* sizeof(char));
                 //prefix concat 'shell=' to environment
                 strcpy(PWD,"PWD=");
@@ -143,14 +175,43 @@ bool my_built_in(int count,char** args) {
                 putenv(PWD);
             } else {
                 perror("getcwd() error");
-                return 1;
             }
         }
+    }
+}
+
+void my_dir(int count, char *const *args) {
+    if(count == 2) {
+        DIR *d;
+        struct dirent *dir;
+        d = opendir(args[1]);
+        if (d) {
+            while ((dir = readdir(d)) != NULL) {
+                if(dir->d_name[0]!='.' || strlen(dir->d_name)>2) {
+                    printf("%s\n", dir->d_name);
+                }
+            }
+            closedir(d);
+        }
+    }else{
+        printf("Correct usage: dir <directory>");
+    }
+}
+
+bool my_built_in(int count, char** args) {
+    char *cmd = args[0];
+    //exit or quit
+    if(strcmp(cmd,"exit")==0 || strcmp(cmd,"quit")==0){
+        exit(0);
+    //cd
+    }else if(strcmp(cmd,"cd")==0) {
+        my_cd(count,args);
     //path
     }else if(strcmp(cmd,"path")==0) {
         //handle memory allocation for paths
         free(paths);
         paths = malloc((size_t) (count) * sizeof(char));
+        //write each argument as a path
         for (int i = 1; i < count; i++) {
             paths[i - 1] = malloc(strlen(args[i]) * sizeof(char));
             paths[i - 1] = args[i];//set paths
@@ -162,21 +223,10 @@ bool my_built_in(int count,char** args) {
         printf("\e[1;1H\e[2J");
     //list contents of directory
     } else if(strcmp(cmd,"dir")==0){
-        if(count==2) {
-            DIR *d;
-            struct dirent *dir;
-            d = opendir(args[1]);
-            if (d) {
-                while ((dir = readdir(d)) != NULL) {
-                    //printf("%s\n", dir->d_name);
-                }
-                closedir(d);
-            }
-        }else{
-            printf("Correct usage: dir <directory>");
-        }
+        my_dir(count, args);
     //environ
     } else if(strcmp(cmd,"environ")==0){
+        //list environment vars
         int i=0;
         while(environ[i]){
             printf("%s\n", environ[i++]);
@@ -189,14 +239,16 @@ bool my_built_in(int count,char** args) {
         printf("\n");
     } else if(strcmp(cmd,"help")==0) {
         //TODO manual
+    //pause
     } else if(strcmp(cmd,"pause")==0) {
         printf("Paused. Press Enter to Continue.");
+        //stays in while until enter
         while (getchar() != '\n'&& getchar() != '\r');
     } else{
         //not built in
         return false;
     }
-    //was built in don't execute
+    //was built in don't execute a command
     return true;
 }
 
@@ -248,7 +300,6 @@ void get_input(char* prompt,char **buffer){
     getline(buffer, &buffer_size, stdin);//getline
     remove_newline_char(buffer);
 
-    //trim(buffer);
 }
 
 
