@@ -44,6 +44,8 @@ int has_read_redirect(char **args, int count);
 
 void perform_write_redirect(char *const *args, int count, int write_redirect);
 
+void process_input(int count, char *const *parsed_input);
+
 extern char** environ;
 
 char** paths;
@@ -61,16 +63,24 @@ int main() {
         int count = get_count(input);
         //parsed_input list of char* pointers
         char **parsed_input = parse_input(input, count);
+        process_input(count, parsed_input);
+        free(parsed_input);
+    }
+    //output
+    return(0);
+}
 
-        char extra = '\0';//extra keeps track of special ways of executing commands
-        char **single_command = malloc(sizeof(char*)*(count));//one command that can be part of exe
-        int cmd_cnt=0;//command count keeps track of arguments in one single command
-        for(int i=0;i<count;i++){
+//process input and run commands
+void process_input(int count, char *const *parsed_input) {
+    char extra = '\0';//extra keeps track of special ways of executing commands
+    char **single_command = malloc(sizeof(char*)*(count+2));//one command that can be part of execv
+    int cmd_cnt=0;//command count keeps track of arguments in one single command
+    for(int i=0;i<count;i++){
             //make wrd set to first word of input
             char *wrd = parsed_input[i];
-            if(strlen(wrd)==1 && wrd[0]=='&') {
+            if(strcmp(wrd,"&")==0){
                 extra = '&';
-            }else if(strlen(wrd)==1 && wrd[0]=='|'){
+            }else if(strcmp(wrd,"|")==0){
                 extra = '|';
             }
             if (extra=='\0'){
@@ -83,17 +93,16 @@ int main() {
                 execute(single_command,cmd_cnt,extra);
                 //zero out single command; not doing this cause issues when performing second execv;
                 for(int m=0;m<cmd_cnt;m++){
-                    //single_command[m]=NULL;
+                    single_command[m]=NULL;
                 }
-                extra='\0';
-                cmd_cnt=0;
+                if((i+1) >= count &&  extra!='&'){// if end of the line and not parallel
+                    wait(NULL);//wait until exe f
+                }
+                extra='\0';//reset extra
+                cmd_cnt=0;//set command count to 0;
             }
         }
-        free(single_command);
-        free(parsed_input);
-    }
-    //output
-    return(0);
+    free(single_command);
 }
 
 
@@ -156,6 +165,7 @@ void execute(char **args,int count,char extra) {
     char *tmp =  strdup(args[0]);
     bool working_path = false;
     int i=0;
+    //go through paths until command is found
     while(!working_path && i<number_of_paths){
         char *p = strdup(paths[i++]);
         strcat(p,tmp);
@@ -181,7 +191,7 @@ void execute(char **args,int count,char extra) {
         //check if has a read redirect
         int read_redirect = has_read_redirect(args,count);
         //put in null terminator
-        args[count]=0;
+        args[count]=NULL;
         pid_t pid = fork();
         if (pid == 0) {
             //this is child
@@ -209,7 +219,7 @@ void execute(char **args,int count,char extra) {
             printf("fork failed");
         } else {
             //this is the parent
-            if(!is_parallel) {
+            if(extra!='&') {//don't wait if parallel
                 wait(NULL);//wait until child is done
             }
         }
