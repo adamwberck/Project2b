@@ -21,7 +21,7 @@ char** parse_input(char* input,int count);
 
 int get_count(char *input);
 
-void execute(char **args,int count);
+void execute(char **args,int count,char extra);
 
 void my_error();
 
@@ -58,10 +58,38 @@ int main() {
         char *input;
         get_input(prompt, &input);
         int count = get_count(input);
-        char **parsedInput = parse_input(input, count);
-        execute(parsedInput,count);
+        //parsed_input list of char* pointers
+        char **parsed_input = parse_input(input, count);
 
-        free(parsedInput);
+        char extra = '\0';//extra keeps track of special ways of executing commands
+        char **single_command = malloc(sizeof(char*)*(count));//one command that can be part of exe
+        int cmd_cnt=0;//command count keeps track of arguments in one single command
+        for(int i=0;i<count;i++){
+            //make wrd set to first word of input
+            char *wrd = parsed_input[i];
+            if(strlen(wrd)==1 && wrd[0]=='&') {
+                extra = '&';
+            }else if(strlen(wrd)==1 && wrd[0]=='|'){
+                extra = '|';
+            }
+            if (extra=='\0'){
+                //add word to command
+                *(single_command + cmd_cnt++) = strdup(wrd);
+            }
+            //checks if &/| separator or end of arguments
+            if(extra != '\0' || ((i+1) >= count)){
+                //execute the single command
+                execute(single_command,cmd_cnt,extra);
+                //zero out single command; not doing this cause issues when performing second execv;
+                for(int m=0;m<cmd_cnt;m++){
+                    single_command[m]=0;
+                }
+                extra='\0';
+                cmd_cnt=0;
+            }
+        }
+        free(single_command);
+        free(parsed_input);
     }
     //output
     return(0);
@@ -118,7 +146,8 @@ int remove_exe_name(char **str) {
     return -1;
 }
 
-void execute(char **args,int count) {
+//args is arguments, count is number of arguments and extra is if to pipe or to run in parallel
+void execute(char **args,int count,char extra) {
     //checks if built in command
     if(my_built_in(count,args)){
         return;
@@ -137,7 +166,7 @@ void execute(char **args,int count) {
     if(!working_path) {
         printf("Command %s not found.\n",args[0]);
     } else{
-        char *path = paths[i - 1];
+        char *path = paths[i-1];
         //put path on the begging of buffer
         strcpy(args[0], path);
         strcat(args[0], tmp);
@@ -169,7 +198,8 @@ void execute(char **args,int count) {
             }
             //run code
             execv(args[0], args);
-            my_error();//only runs if execv fails; never should run
+            printf("exe failed\n");
+            //my_error();//only runs if execv fails; never should run
         } else if (pid < 0) {
             printf("fork failed");
         } else {
