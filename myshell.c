@@ -33,7 +33,7 @@ int remove_exe_name(char **str);
 
 char *get_prompt() ;
 
-void my_dir(int count, char *const *args);
+void my_dir(int count, char **args);
 
 int has_write_redirect(char **args, int count);
 
@@ -43,7 +43,6 @@ int has_read_redirect(char **args, int count);
 
 void perform_write_redirect(char *const *args, int count, int write_redirect);
 
-//
 extern char** environ;
 
 char** paths;
@@ -272,16 +271,26 @@ void my_cd(int count,char** args){
     }
 }
 
-void my_dir(int count, char *const *args) {
-    if(count == 2) {
+void my_dir(int count, char ** args) {
+    int write_redirect = has_write_redirect(args,count);
+    if(count == 2 || write_redirect>=1) {
+        int old_out = 0;
+        if(write_redirect>=1){
+            old_out = dup(STDOUT_FILENO);
+            perform_write_redirect(args,count,write_redirect);
+        }
         DIR *d;
         struct dirent *dir;
         d = opendir(args[1]);
         if (d) {
             while ((dir = readdir(d)) != NULL) {
-                printf("%s\n", dir->d_name);
+                write(STDOUT_FILENO,dir->d_name,strlen(dir->d_name));
+                write(STDOUT_FILENO,"\n",1);
             }
             closedir(d);
+        }
+        if(write_redirect>=1){
+            dup2(old_out,STDOUT_FILENO);
         }
     }else{
         printf("Correct usage: dir <directory>");
