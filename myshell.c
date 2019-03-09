@@ -30,7 +30,7 @@ void my_error();
 
 bool my_built_in(int count, char** args);
 
-void put_shell_into_env();
+void put_info_into_env();
 
 int remove_exe_name(char **str);
 
@@ -55,7 +55,7 @@ int number_of_paths = 0;
 int fd[2];
 
 int main() {
-    put_shell_into_env();
+    put_info_into_env();
     int j=0;
     while(j<50) {
         j++;
@@ -138,7 +138,7 @@ char *get_prompt() {
     return prompt;
 }
 
-void put_shell_into_env() {
+void put_info_into_env() {
     //allocate space to hold shell environment
     size_t buffer_size=PATH_MAX;
     char* temp = malloc(buffer_size* sizeof(char));
@@ -156,6 +156,17 @@ void put_shell_into_env() {
     if(putenv(shell)!=0){
         printf("putenv failed");
     }
+
+    char* parent=malloc((strlen(temp)+8)* sizeof(char));
+    //prefix concat 'shell=' to environment
+    strcpy(parent,"parent=");
+    strcat(parent,temp);
+    //put parent into environment
+    if(putenv(parent)!=0){
+        printf("putenv failed");
+    }
+
+
     free(temp);//free temp memory;
 }
 
