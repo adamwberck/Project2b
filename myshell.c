@@ -14,8 +14,6 @@
 
 void my_cd(int count, char** args);
 
-void malloc_check(const char* buffer);
-
 void remove_newline_char(char **str);
 
 void get_input(char* prompt,char **input);
@@ -166,7 +164,8 @@ void put_info_into_env() {
     strcat(shell,temp);
     //put shell into environment
     if(putenv(shell)!=0){
-        printf("putenv failed");
+        //putenv failed
+        my_error();
     }
 
     char* parent=malloc((strlen(temp)+8)* sizeof(char));
@@ -175,13 +174,15 @@ void put_info_into_env() {
     strcat(parent,temp);
     //put parent into environment
     if(putenv(parent)!=0){
-        printf("putenv failed");
+        //putenv failed
+        my_error();
     }
 
 
     free(temp);//free temp memory;
 }
 
+//remove exe name from path by looking at last '/'
 int remove_exe_name(char **str) {
     char* s = *str;
     size_t len =  strlen(s);
@@ -195,7 +196,7 @@ int remove_exe_name(char **str) {
 }
 
 //args is arguments, count is number of arguments and extra is if to pipe or to run in parallel
-void execute(char **args,int count,char extra,bool piping_in) {
+void execute(char **args ,int count ,char extra ,bool piping_in ){
     //checks if built in command
     if(my_built_in(count,args)){
         return;
@@ -230,7 +231,6 @@ void execute(char **args,int count,char extra,bool piping_in) {
         int read_redirect = has_read_redirect(args, count);
         //put in null terminator
         args[count] = NULL;
-
         if (extra == '|') {
             pipe(fd);
         }
@@ -282,6 +282,7 @@ void execute(char **args,int count,char extra,bool piping_in) {
     }
 }
 
+//use last argument as write redirect argument
 void perform_write_redirect(char *const *args, int count, int write_redirect) {
     int f=0;
     //truncate
@@ -296,6 +297,7 @@ void perform_write_redirect(char *const *args, int count, int write_redirect) {
     close(f);
 }
 
+//check if it has a read redirect 1 if it does 0 it does not -1 if error
 int has_read_redirect(char **args, int count) {
     //check if has write redirect to change argument check
     if(has_write_redirect(args,count)>=1){
@@ -338,6 +340,7 @@ int has_write_redirect(char **args, int count) {
     return is_redirect;
 }
 
+// my_cd uses chdir() to change director
 void my_cd(int count,char** args){
     //if count more than two error
     if (count>2){
@@ -347,7 +350,7 @@ void my_cd(int count,char** args){
         //other wise run cd
     else{
         char *new_dir;
-        //one argument give own directory
+        //one argument give own directory by using period;
         if(count==1){
             new_dir=".";
             //otherwise give first argument
@@ -372,6 +375,7 @@ void my_cd(int count,char** args){
     }
 }
 
+//my dir using readdir to display content of directory
 void my_dir(int count, char ** args) {
     if(count == 2) {
         DIR *d;
@@ -385,10 +389,12 @@ void my_dir(int count, char ** args) {
             closedir(d);
         }
     }else{
-        printf("Correct usage: dir <directory>");
+        //Correct usage: dir <directory>
+        my_error();
     }
 }
 
+//function does built in commands
 bool my_built_in(int count, char** args) {
     char *cmd = args[0];
     //exit or quit
@@ -460,6 +466,7 @@ bool my_built_in(int count, char** args) {
     return true;
 }
 
+//displays the only allowed error
 void my_error() {
     char error_message[30] = "An error has occurred\n";
     write(STDERR_FILENO,error_message,strlen(error_message));
@@ -481,6 +488,7 @@ int get_count(char *input) {
     return count;
 }
 
+//parses input into char** (a char array);
 char** parse_input(char* input,int count){
     char** output    = 0;
     char del[2]=" ";
@@ -503,13 +511,13 @@ char** parse_input(char* input,int count){
 void get_input(char* prompt,char **input){
     size_t buffer_size = 32;//aprox size of a command; can be changed by getline if not large enough
     *input = (char *) malloc(buffer_size * sizeof(char)); //allocate space for input
-    malloc_check(*input);//check to ensure space was allocated
     printf("%s",prompt);
     getline(input, &buffer_size, stdin);//getline
     remove_newline_char(input);
     replace_other_whitespace(input);
 }
 
+//replace tabs white space with a space
 void replace_other_whitespace(char **str) {
     char *s = *str;//get pointer to char
     int i=0;
@@ -523,7 +531,7 @@ void replace_other_whitespace(char **str) {
     }
 }
 
-
+//finds newline char and replaces it with null terminator
 void remove_newline_char(char **str){
     char *s = *str;//get pointer to char
     int i=0;
@@ -534,12 +542,5 @@ void remove_newline_char(char **str){
             s[i]='\0';
         }
         i++;
-    }
-}
-
-void malloc_check(const char* buffer){
-    if( buffer == NULL) {
-        my_error();//malloc error
-        exit(1);
     }
 }
