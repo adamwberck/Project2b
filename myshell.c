@@ -54,21 +54,33 @@ char** paths;
 int number_of_paths = 0;
 int fd[2];
 
-int main() {
+int main(int argc, char* argv[]) {
     put_info_into_env();
-    int j=0;
-    while(j<50) {
-        j++;
+
+    FILE *file = 0;
+    char line[256];
+    if (argc > 1) {
+        char const *const fileName = argv[1];
+        file = fopen(fileName, "r");
+        fgets(line, sizeof(line), file);
+    }
+    do{
         char *prompt = get_prompt();
         char *input;
-        get_input(prompt, &input);
+        if(argc>1){
+            input = malloc(sizeof(char)*strlen(line));
+            sprintf(input,"%s", line);
+            remove_newline_char(&input);
+        }else {
+            get_input(prompt, &input);
+        }
         int count = get_count(input);
         //parsed_input list of char* pointers
         char **parsed_input = parse_input(input, count);
         process_input(count, parsed_input);
         free(parsed_input);
-    }
-    //output
+    }while(argc<=1 || fgets(line, sizeof(line), file));//keep going unless end of file always go if interactive mode
+    fclose(file);
     return(0);
 }
 
@@ -329,7 +341,8 @@ int has_write_redirect(char **args, int count) {
 void my_cd(int count,char** args){
     //if count more than two error
     if (count>2){
-        printf("cd takes one argument\n");
+        //cd takes one argument
+        my_error();
     }
         //other wise run cd
     else{
@@ -347,7 +360,6 @@ void my_cd(int count,char** args){
         }else{
             char cwd[PATH_MAX];
             if (getcwd(cwd, sizeof(cwd)) != NULL) {
-                printf("Current directory : %s\n", cwd);
                 char* PWD = malloc((strlen(cwd)+7)* sizeof(char));
                 //prefix concat 'shell=' to environment
                 strcpy(PWD,"PWD=");
