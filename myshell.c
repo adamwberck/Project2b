@@ -8,43 +8,10 @@
 #include <dirent.h>
 #include <sys/fcntl.h>
 #include <errno.h>
+#include "myshell.h"
 
 #define FD_READ_END 0
 #define FD_WRITE_END 1
-
-void my_cd(int count, char** args);
-
-void remove_newline_char(char **str);
-
-void get_input(char* prompt,char **input);
-
-char** parse_input(char* input,int count);
-
-int get_count(char *input);
-
-void execute(char **args,int count,char extra,bool piping_in);
-
-void my_error();
-
-bool my_built_in(int count, char** args);
-
-void put_info_into_env();
-
-int remove_exe_name(char **str);
-
-char *get_prompt() ;
-
-void my_dir(int count, char **args);
-
-int has_write_redirect(char **args, int count);
-
-void replace_other_whitespace(char **str);
-
-int has_read_redirect(char **args, int count);
-
-void perform_write_redirect(char *const *args, int count, int write_redirect);
-
-void process_input(int count, char *const *parsed_input);
 
 extern char** environ;
 
@@ -447,13 +414,17 @@ bool my_built_in(int count, char** args) {
             }
             write(STDOUT_FILENO,"\n",1);
         } else if(strcmp(cmd,"help")==0) {
-            //TODO manual
-            //pause
+            FILE* h_file = fopen("readme","r");
+            char line[256];
+            while (fgets(line, sizeof(line), h_file)) {
+                write(STDOUT_FILENO,line,strlen(line));
+            }
         }
         //reset STDOUT
         if(write_redirect>=1){
             dup2(old_out,STDOUT_FILENO);
         }
+    //pause
     } else if(strcmp(cmd,"pause")==0) {
         printf("Paused. Press Enter to Continue.");
         //stays in while until enter
